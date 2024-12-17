@@ -13,14 +13,28 @@ class CoppeliaJointIU(retico_core.abstract.IncrementalUnit):
         super().__init__(creator=creator, iuid=iuid, previous_iu=previous_iu,
                          grounded_in=grounded_in, payload=payload)
         self.payload = payload
-        self._vision_loop_active = False
 
     def __str__(self):
         return "(CoppeliaJointIU: " + self.payload + ")"
 
 
-class CoppeliaSimController(retico_core.AbstractConsumingModule):
+class CoppeliaCozmoIU(retico_core.abstract.IncrementalUnit):
+    @staticmethod
+    def type():
+        return "CoppeliaCozmoIU"
 
+    def __init__(self, creator=None, iuid=0, previous_iu=None,
+                 grounded_in=None, payload=None, **kwargs):
+        super().__init__(creator=creator, iuid=iuid, previous_iu=previous_iu,
+                         grounded_in=grounded_in, payload=payload)
+        self.payload = payload
+
+    def __str__(self):
+        return "(CoppeliaCozmoIU: " + self.payload + ")"
+
+
+
+class CoppeliaSimController(retico_core.AbstractConsumingModule):
     @staticmethod
     def name():
         return "CoppeliaSimController"
