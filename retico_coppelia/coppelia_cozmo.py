@@ -1,3 +1,6 @@
+import threading
+import time
+
 import numpy as np
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 import retico_core
@@ -5,15 +8,45 @@ from retico_core.text import TextIU
 
 
 class Cozmo:
-    MIN_WHEEL_POS = -np.pi
-    MAX_WHEEL_POS = np.pi
+    class CozmoThread:
+        def __init__(self, cozmo, thread):
+            self.cozmo = cozmo
+            self.thread = thread
+
+        def start(self):
+            self.thread.start()
+
+        def _lock(self):
+            if self.cozmo._simlock:
+                raise Exception("Fatal error: multiple sources tried to use the sim lock.")
+
+            self.cozmo._simlock = True
+
+        def _unlock(self):
+            if not self.cozmo._simlock:
+                raise Exception("Fatal error: something unexpectedly tampered with the sim lock.")
+
+            self.cozmo._simlock = False
+
+        def wait_until_completed(self):
+            self._lock()
+            self.thread.join()
+            self._unlock()
+
+
+    MAX_LIFT_POS = MAX_HEAD_POS = 0.785
+    MIN_LIFT_POS = MIN_HEAD_POS = 0
 
     def __init__(self, cozmo_path, scene, start_scene=False):
         self._sim = RemoteAPIClient().require('sim')
         self._sim.loadScene(scene)
 
-        self._active_joint = None
-        self._waiting = False
+        self._simlock = False
+
+        # Initialize simulation clients
+        self._sims = {}
+        for name in ['wheels', 'lift', 'head']:
+            self._sims[name] = RemoteAPIClient().require('sim')
 
         # Simulation joint handles
         self._left_motor = self._sim.getObject(cozmo_path + '/left_wheel_joint')
@@ -22,117 +55,119 @@ class Cozmo:
         self._lift = self._sim.getObject(cozmo_path + '/arm_joint')
 
         # Initialize joint positions
-        self._sim.setJointTargetPosition(self._left_motor, 0)
         self._sim.setJointTargetVelocity(self._left_motor, 0)
-        self._sim.setJointTargetPosition(self._right_motor, 0)
         self._sim.setJointTargetVelocity(self._right_motor, 0)
-
-        # Virtual joint positions
-        self._left_wheel_position = 0
-        self._right_wheel_position = 0
 
         if start_scene:
             print("Starting simulation...")
             self._sim.startSimulation()
 
     def shutdown(self):
-        self._sim.setJointPosition(self._left_motor, 0)
-        self._sim.setJointPosition(self._right_motor, 0)
-
         self._sim.stopSimulation()
 
-    def wait_until_completed(self):
-        if self._active_joint is None:
-            raise Exception("No action to await.")
-        if self._waiting:
-            raise Exception("Tried to await an action while already awaiting.")
-
-        self._waiting = True
-        sim = RemoteAPIClient().require('sim')
-        target = sim.getJointTargetPosition(self._active_joint)
-        while self._waiting:
-            # print("Diff:", target - sim.getJointPosition(self._active_joint))
-            print("Target Position:", target)
-            # print("Current Position L:", sim.getJointPosition(self._left_motor))
-            print("Current Position R:", sim.getJointPosition(self._right_motor))
-            # print("Current Vel L:", sim.getJointVelocity(self._left_motor))
-            # print("Current Vel R:", sim.getJointVelocity(self._right_motor))
-            if abs(sim.getJointPosition(self._active_joint) - target) < 0.05:
-                self._active_joint = None
-                self._waiting = False
-                print("REACHED TARGET")
-                return
-
-    def _update_wheel(self, position, radians: float):
-        # position = (position + radians) % (2 * np.pi)
-        position += radians
-        # if position > 2 * np.pi:
-        #     position = position - (2 * np.pi)
-        # elif position < 0:
-        #     position = (2 * np.pi) + position
-
-        if position > self.MAX_WHEEL_POS:
-            position = self.MIN_WHEEL_POS + (position - self.MAX_WHEEL_POS)
-        elif position < self.MIN_WHEEL_POS:
-            position = self.MAX_WHEEL_POS - abs(position - self.MIN_WHEEL_POS)
-
-
-        return position
-
     def turn_in_place(self, radians: float, speed: float):
+        while self._simlock: continue
 
-        sim_left = RemoteAPIClient().require('sim')
-        sim_right = RemoteAPIClient().require('sim')
+        thread = threading.Thread(
+            target=self._turn_in_place,
+            args=[
+                self._sims['wheels'],
+                [self._left_motor, self._right_motor],
+                radians,
+                speed
+            ]
+        )
+        thread = self.CozmoThread(self, thread)
+        thread.start()
 
-        print("turning from:", sim_right.getJointPosition(self._right_motor))
+        return thread
 
-        # Update virtual joint positions
-        self._left_wheel_position = self._update_wheel(self._left_wheel_position, -radians)
-        self._right_wheel_position = self._update_wheel(self._right_wheel_position, radians)
+    @staticmethod
+    def _turn_in_place(sim, joints, radians, speed):
+        sim.setJointTargetVelocity(joints[0], -speed)
+        sim.setJointTargetVelocity(joints[1], speed)
 
-        sim_left.setJointTargetVelocity(self._left_motor, -speed)
-        sim_right.setJointTargetVelocity(self._right_motor, speed)
+        # Calculate how long to turn joints...
+        time.sleep(abs(radians * speed))
 
-        sim_left.setJointTargetPosition(self._left_motor, self._left_wheel_position)
-        sim_right.setJointTargetPosition(self._right_motor, self._right_wheel_position)
+        sim.setJointTargetVelocity(joints[0], 0)
+        sim.setJointTargetVelocity(joints[1], 0)
 
-        # sets active joint for wait_until_completed()
-        self._active_joint = self._right_motor
+    def set_head_angle(self, angle: float, speed: float):
+        while self._simlock: continue
 
-        return self
+        thread = threading.Thread(
+            target=self._set_head_angle,
+            args=[
+                self._sims['head'],
+                self._head,
+                angle,
+                speed
+            ]
+        )
+        thread = self.CozmoThread(self, thread)
+        thread.start()
 
-    def set_head_angle(self, angle: float):
-        sim = RemoteAPIClient().require('sim')
+        return thread
 
-        sim.setJointTargetPosition(self._head, angle)
+    @staticmethod
+    def _set_head_angle(sim, joint, angle, speed):
+        sim.setJointTargetPosition(joint, angle)  # TODO utilize speed for movement
 
-        # sets values for wait_until_completed()
-        self._active_joint = self._head
+        # Calculate time for joint to move and wait before terminating
+        time.sleep(abs(angle * speed))
 
-        return self
+    def set_lift_height(self, height: float, speed: float):
+        while self._simlock: continue
 
-    def set_lift_height(self, height: float):
-        sim = RemoteAPIClient().require('sim')
+        thread = threading.Thread(
+            target=self._set_lift_height,
+            args=[
+                self._sims['lift'],
+                self._lift,
+                height,
+                speed
+            ]
+        )
+        thread = self.CozmoThread(self, thread)
+        thread.start()
 
-        sim.setJointTargetPosition(self._lift, height)
+        return thread
 
-        # sets active joint for wait_until_completed()
-        self._active_joint = self._lift
+    @staticmethod
+    def _set_lift_height(sim, joint, height, speed):
+        sim.setJointTargetPosition(joint, height)  # TODO utilize speed for movement
 
-        return self
+        # Calculate time for joint to move and wait before terminating
+        time.sleep(abs(height * speed))
 
     def drive_straight(self, distance: float, speed: float):
-        sim = RemoteAPIClient().require('sim')
+        while self._simlock: continue
 
-        sim.setJointTargetVelocity(self._left_motor, speed)
-        sim.setJointTargetVelocity(self._right_motor, speed)
-        sim.setJointTargetPosition(self._left_motor, distance)
-        sim.setJointTargetPosition(self._right_motor, distance)
+        thread = threading.Thread(
+            target=self._drive_straight,
+            args=[
+                self._sims['wheels'],
+                [self._left_motor, self._right_motor],
+                distance,
+                speed
+            ]
+        )
+        thread = self.CozmoThread(self, thread)
+        thread.start()
 
-        # sets active joint for wait_until_completed()
-        self._active_joint = self._right_motor
+        return thread
 
-        return self
+    @staticmethod
+    def _drive_straight(sim, joints, distance, speed):
+        sim.setJointTargetVelocity(joints[0], speed)
+        sim.setJointTargetVelocity(joints[1], speed)
+
+        # Calculate how long to turn joints...
+        time.sleep(abs(distance * speed))
+
+        sim.setJointTargetVelocity(joints[0], 0)
+        sim.setJointTargetVelocity(joints[1], 0)
 
 
 class CoppeliaCozmoRobot(retico_core.AbstractModule):
@@ -174,23 +209,29 @@ class CoppeliaCozmoRobot(retico_core.AbstractModule):
         iu = self.queue.pop(0)
         command = iu.payload
         if "turn left" in command:
-            self.robot.turn_in_place(radians=np.pi-(np.pi/180), speed=np.pi/180).wait_until_completed()
+            self.robot.turn_in_place(radians=1, speed=1).wait_until_completed()
+            # self.robot.turn_in_place(radians=1, speed=1)
         if "turn right" in command:
-            self.robot.turn_in_place(radians=(-np.pi)+(np.pi/180), speed=np.pi/180).wait_until_completed()
+            self.robot.turn_in_place(radians=-1, speed=-1).wait_until_completed()
+            # self.robot.turn_in_place(radians=-1, speed=-1)
         if "look up" in command:
-            self.robot.set_head_angle(angle=self.max_head_angle).wait_until_completed()
+            self.robot.set_head_angle(angle=self.max_head_angle, speed=2).wait_until_completed()
+            # self.robot.set_head_angle(angle=self.max_head_angle, speed=1)
         if "look down" in command:
-            self.robot.set_head_angle(angle=0).wait_until_completed()
+            self.robot.set_head_angle(angle=0, speed=1).wait_until_completed()
+            # self.robot.set_head_angle(angle=0, speed=1)
         if "lift up" in command:
-            self.robot.set_lift_height(height=self.max_lift_height).wait_until_completed()
+            self.robot.set_lift_height(height=self.max_lift_height, speed=2).wait_until_completed()
+            # self.robot.set_lift_height(height=self.max_lift_height, speed=1)
         if "lift down" in command:
-            self.robot.set_lift_height(height=0).wait_until_completed()
+            self.robot.set_lift_height(height=0, speed=1).wait_until_completed()
+            # self.robot.set_lift_height(height=0, speed=1)
         if "drive forward" in command:
-            self.shutdown()
-            self.robot.drive_straight(distance=3.14, speed=0.5).wait_until_completed()
+            self.robot.drive_straight(distance=1, speed=1).wait_until_completed()
+            # self.robot.drive_straight(distance=1, speed=1)
         if "drive backward" in command:
-            self.shutdown()
-            self.robot.drive_straight(distance=-3.14, speed=-0.5).wait_until_completed()
+            self.robot.drive_straight(distance=-1, speed=-1).wait_until_completed()
+            # self.robot.drive_straight(distance=-1, speed=-1)
 
     def shutdown(self):
         self.robot.shutdown()
