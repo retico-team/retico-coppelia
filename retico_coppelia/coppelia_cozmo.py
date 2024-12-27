@@ -1,5 +1,6 @@
 import threading
 import time
+import gc
 
 import retico_core
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
@@ -15,7 +16,10 @@ class Cozmo:
             self.thread = thread
 
         def start(self):
+            print("Staring thread:", self.thread.name)
             self.thread.start()
+            print("Enumerated threads:", threading.enumerate())
+            self.thread.join()
 
         def _lock(self):
             if self.cozmo._simlock:
@@ -31,14 +35,18 @@ class Cozmo:
 
         def wait_until_completed(self):
             self._lock()
-            self.thread.join()
+            # self.thread.join()
+            while self.thread.is_alive(): continue
             self._unlock()
 
 
+    FRONT_LEFT_RADIUS = 0.36
     MAX_LIFT_POS = MAX_HEAD_POS = 0.785
     MIN_LIFT_POS = MIN_HEAD_POS = 0
 
     def __init__(self, cozmo_path, scene, start_scene=False):
+        self.start_scene = start_scene
+
         self._sim = RemoteAPIClient().require('sim')
         self._sim.loadScene(scene)
 
@@ -64,12 +72,16 @@ class Cozmo:
         self._sim.setJointTargetVelocity(self._right_front_motor, 0)
         self._sim.setJointTargetVelocity(self._right_back_motor, 0)
 
-        if start_scene:
+        if self.start_scene:
             print("Starting simulation...")
             self._sim.startSimulation()
 
     def shutdown(self):
-        self._sim.stopSimulation()
+        if self.start_scene:
+            self._sim.stopSimulation()
+        print("Active threads:", threading.active_count())
+        print("Enumerated threads:", threading.enumerate())
+
 
     def turn_in_place(self, angle: AngleDistance, speed: Speed):
         while self._simlock: continue
@@ -85,9 +97,11 @@ class Cozmo:
                     self._right_back_motor
                 ],
                 angle,
-                speed
+                speed,
+                self.FRONT_LEFT_RADIUS
             ]
         )
+        thread.daemon = True
         thread = self.CozmoThread(self, thread)
         thread.start()
 
@@ -96,7 +110,7 @@ class Cozmo:
         return thread
 
     @staticmethod
-    def _turn_in_place(sim, joints, angle: AngleDistance, speed: Speed):
+    def _turn_in_place(sim, joints, angle: AngleDistance, speed: Speed, radius: float):
         if angle.magnitude == 0: return
 
         if angle.magnitude > 0:
@@ -119,7 +133,7 @@ class Cozmo:
             sim.setJointTargetVelocity(joints[3], -3.14)
 
         # Calculate how long to turn joints...
-        time.sleep(angle.get_wait_time(speed))
+        time.sleep(angle.get_wait_time(speed, radius))
 
         sim.setJointTargetVelocity(joints[0], 0)
         sim.setJointTargetVelocity(joints[1], 0)
@@ -135,20 +149,22 @@ class Cozmo:
                 self._sims['head'],
                 self._head,
                 angle,
-                speed
+                speed,
+                self.FRONT_LEFT_RADIUS
             ]
         )
+        thread.daemon = True
         thread = self.CozmoThread(self, thread)
         thread.start()
 
         return thread
 
     @staticmethod
-    def _set_head_angle(sim, joint, angle: AngleDistance, speed: Speed):
+    def _set_head_angle(sim, joint, angle: AngleDistance, speed: Speed, radius: float):
         sim.setJointTargetPosition(joint, angle.magnitude)  # TODO utilize speed for movement
 
         # Calculate time for joint to move and wait before terminating
-        time.sleep(angle.get_wait_time(speed))
+        time.sleep(angle.get_wait_time(speed, radius))
 
     def set_lift_height(self, height: float, speed: Speed):
         while self._simlock: continue
@@ -162,6 +178,7 @@ class Cozmo:
                 speed
             ]
         )
+        thread.daemon = True
         thread = self.CozmoThread(self, thread)
         thread.start()
 
@@ -187,26 +204,37 @@ class Cozmo:
             target=self._drive_straight,
             args=[
                 self._sims['wheels'],
-                [self._left_motor, self._right_motor],
+                [
+                    self._left_front_motor,
+                    self._left_back_motor,
+                    self._right_front_motor,
+                    self._right_back_motor
+                ],
                 distance,
-                speed
+                speed,
+                self.FRONT_LEFT_RADIUS
             ]
         )
+        thread.daemon = True
         thread = self.CozmoThread(self, thread)
         thread.start()
 
         return thread
 
     @staticmethod
-    def _drive_straight(sim, joints, distance: AngleDistance, speed: Speed):
+    def _drive_straight(sim, joints, distance: AngleDistance, speed: Speed, radius: float):
         sim.setJointTargetVelocity(joints[0], speed.rate)
         sim.setJointTargetVelocity(joints[1], speed.rate)
+        sim.setJointTargetVelocity(joints[2], speed.rate)
+        sim.setJointTargetVelocity(joints[3], speed.rate)
 
         # Calculate how long to turn joints...
-        time.sleep(distance.get_wait_time(speed))
+        time.sleep(distance.get_wait_time(speed, radius))
 
         sim.setJointTargetVelocity(joints[0], 0)
         sim.setJointTargetVelocity(joints[1], 0)
+        sim.setJointTargetVelocity(joints[2], 0)
+        sim.setJointTargetVelocity(joints[3], 0)
 
 
 class CoppeliaCozmoRobot(retico_core.AbstractModule):
@@ -248,9 +276,9 @@ class CoppeliaCozmoRobot(retico_core.AbstractModule):
         iu = self.queue.pop(0)
         command = iu.payload
         if "turn left" in command:
-            self.robot.turn_in_place(angle=Degrees(15), speed=DegreesPerSecond(3.14)).wait_until_completed()
+            self.robot.turn_in_place(angle=Degrees(3.14), speed=DegreesPerSecond(3.14)).wait_until_completed()
         if "turn right" in command:
-            self.robot.turn_in_place(angle=Degrees(-15), speed=DegreesPerSecond(3.14)).wait_until_completed()
+            self.robot.turn_in_place(angle=Degrees(-3.14), speed=DegreesPerSecond(3.14)).wait_until_completed()
         if "look up" in command:
             self.robot.set_head_angle(angle=Radians(self.max_head_angle), speed=RadiansPerSecond(1)).wait_until_completed()
         if "look down" in command:
@@ -260,9 +288,11 @@ class CoppeliaCozmoRobot(retico_core.AbstractModule):
         if "lift down" in command:
             self.robot.set_lift_height(height=0, speed=RadiansPerSecond(1)).wait_until_completed()
         if "drive forward" in command:
-            self.robot.drive_straight(distance=Millimeters(50), speed=MillimetersPerSecond(50)).wait_until_completed()
+            self.robot.drive_straight(distance=Degrees(3.14), speed=DegreesPerSecond(3.14)).wait_until_completed()
         if "drive backward" in command:
-            self.robot.drive_straight(distance=Millimeters(-50), speed=MillimetersPerSecond(50)).wait_until_completed()
+            self.robot.drive_straight(distance=Degrees(-3.14), speed=DegreesPerSecond(3.14)).wait_until_completed()
 
     def shutdown(self):
         self.robot.shutdown()
+        del self.robot
+        gc.collect()

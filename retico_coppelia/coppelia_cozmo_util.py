@@ -49,7 +49,7 @@ class AngleDistance(ABC):
         self.magnitude = magnitude
 
     @abstractmethod
-    def get_wait_time(self, speed):
+    def get_wait_time(self, angular_speed, joint_radius):
         raise NotImplementedError  # TODO
 
 
@@ -63,8 +63,8 @@ class Degrees(AngleDistance):
     def to_radians(self):
         return (np.pi / 180) * self.magnitude
 
-    def get_wait_time(self, speed: DegreesPerSecond):
-        return abs(self.magnitude / speed.rate)
+    def get_wait_time(self, angular_speed: DegreesPerSecond, joint_radius: float):
+        return abs(self.magnitude / (joint_radius * angular_speed.rate))
 
 
 class Radians(AngleDistance):
@@ -74,13 +74,13 @@ class Radians(AngleDistance):
     def from_degrees(self, degrees):
         self.magnitude = (np.pi / 180) * degrees
 
-    def get_wait_time(self, speed: RadiansPerSecond):
-        return abs(self.magnitude / speed.rate)
+    def get_wait_time(self, angular_speed: RadiansPerSecond, joint_radius: float):
+        return abs(self.magnitude / (joint_radius * angular_speed.rate))
 
 
 class Millimeters(AngleDistance):
     def __init__(self, magnitude):
         super().__init__(magnitude)
 
-    def get_wait_time(self, speed: MillimetersPerSecond):
+    def get_wait_time(self, angular_speed: MillimetersPerSecond, joint_radius: float):
         raise NotImplementedError  # TODO
