@@ -63,8 +63,13 @@ class Degrees(AngleDistance):
     def to_radians(self):
         return (np.pi / 180) * self.magnitude
 
-    def get_wait_time(self, angular_speed: DegreesPerSecond, joint_radius: float):
-        return abs(self.magnitude / (joint_radius * angular_speed.rate))
+    def get_wait_time(self, angular_speed: Speed, joint_radius: float):
+        if type(angular_speed) is DegreesPerSecond:
+            return abs(self.magnitude / (joint_radius * angular_speed.rate))
+        elif type(angular_speed) is RadiansPerSecond:
+            return abs(self.to_radians() / (joint_radius * angular_speed.rate))
+        else:
+            raise Exception(f"Invalid 'Speed' subtype '{type(angular_speed)}' for Angle subtype 'Degrees'.")
 
 
 class Radians(AngleDistance):
