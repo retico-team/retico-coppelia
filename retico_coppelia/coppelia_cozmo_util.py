@@ -2,12 +2,16 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 
-class Speed:
+class Speed(ABC):
     def __init__(self, rate):
         if rate < 0:
             raise Exception("Can't pass negative value for speed.")
 
         self.rate = rate
+
+    @abstractmethod
+    def to_rads(self):
+        raise NotImplementedError
 
 
 class DegreesPerSecond(Speed):
@@ -15,32 +19,23 @@ class DegreesPerSecond(Speed):
         super().__init__(degs)
 
     def to_rads(self):
-        if __name__ == '__main__':
-            return (np.pi / 180) * self.rate
-
-    def from_rads(self, rads):
-        raise NotImplementedError  # TODO
+        # return (np.pi / 180) * self.rate
+        return np.radians(self.rate)
 
 
 class RadiansPerSecond(Speed):
     def __init__(self, rads):
         super().__init__(rads)
 
-    def from_degs(self, degs):
-        raise NotImplementedError  # TODO
-
-    def from_mms(self, mms):
-        raise NotImplementedError  # TODO
+    def to_rads(self):
+        return self.rate
 
 
 class MillimetersPerSecond(Speed):
     def __init__(self, mms):
         super().__init__(mms)
 
-    def from_degs(self, degs):
-        raise NotImplementedError  # TODO
-
-    def from_rads(self, rads):
+    def to_rads(self):
         raise NotImplementedError  # TODO
 
 
@@ -49,43 +44,40 @@ class AngleDistance(ABC):
         self.magnitude = magnitude
 
     @abstractmethod
-    def get_wait_time(self, angular_speed, joint_radius):
-        raise NotImplementedError  # TODO
+    def get_wait_time(self, speed: Speed):
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_radians(self):
+        raise NotImplementedError
 
 
 class Degrees(AngleDistance):
     def __init__(self, magnitude):
         super().__init__(magnitude)
 
-    def from_radians(self, radians):
-        self.magnitude = (180 / np.pi) * radians
+    def get_wait_time(self, speed: Speed):
+        return abs(self.to_radians() / speed.to_rads())
 
     def to_radians(self):
-        return (np.pi / 180) * self.magnitude
-
-    def get_wait_time(self, angular_speed: Speed, joint_radius: float):
-        if type(angular_speed) is DegreesPerSecond:
-            return abs(self.magnitude / (joint_radius * angular_speed.rate))
-        elif type(angular_speed) is RadiansPerSecond:
-            return abs(self.to_radians() / (joint_radius * angular_speed.rate))
-        else:
-            raise Exception(f"Invalid 'Speed' subtype '{type(angular_speed)}' for Angle subtype 'Degrees'.")
+        # return (np.pi / 180) * self.magnitude
+        return np.degrees(self.magnitude)
 
 
 class Radians(AngleDistance):
     def __init__(self, magnitude):
         super().__init__(magnitude)
 
-    def from_degrees(self, degrees):
-        self.magnitude = (np.pi / 180) * degrees
+    def get_wait_time(self, speed: Speed):
+        return abs(self.magnitude / speed.to_rads())
 
-    def get_wait_time(self, angular_speed: RadiansPerSecond, joint_radius: float):
-        return abs(self.magnitude / (joint_radius * angular_speed.rate))
+    def to_radians(self):
+        return self.magnitude
 
 
 class Millimeters(AngleDistance):
     def __init__(self, magnitude):
         super().__init__(magnitude)
 
-    def get_wait_time(self, angular_speed: MillimetersPerSecond, joint_radius: float):
+    def get_wait_time(self, speed: Speed):
         raise NotImplementedError  # TODO

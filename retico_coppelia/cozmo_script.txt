@@ -1,0 +1,125 @@
+import time
+import threading
+import numpy as np
+
+# Cozmo radi
+WHEELBASE_RADIUS = 0.243
+FRONT_WHEEL_RADIUS = 0.165
+BACK_WHEEL_RADIUS = 0.125
+BACK_WHEEL_SCALAR = 1.32
+
+# Cozmo orientation correction controller constants
+KP = 6.000  # Proportional gain
+KI = 0.000  # Integral gain
+KD = 0.000  # Derivative gain
+
+def sysCall_init():
+    self.sim = require('sim')
+    self.cozmo = self.sim.getObject('/cozmo')
+
+    self.joints = {}
+    for name in ['left_front', 'left_back', 'right_front', 'right_back']:
+        self.joints[name] = self.sim.getObject('/cozmo/' + name + '_joint')
+
+    # Flags
+    self.correcting = False
+    self.moving = False
+
+    # Cozmo target variables
+    self.target_radians = 0
+    self.target_speed = 0
+
+    # correction controller value trackers
+    self.err_sum = 0
+    self.last_err = 0
+    self.cum_angle = 0
+    self.prev_angle = self.sim.getObjectOrientation(self.cozmo)[2]
+
+def sysCall_thread():
+    # Put your main code here
+    pass
+
+def sysCall_sensing():
+    curr_angle = self.sim.getObjectOrientation(self.cozmo)[2]
+
+    angle_diff = curr_angle - self.prev_angle
+    if angle_diff > np.pi:
+        angle_diff -= 2 * np.pi
+    elif angle_diff < -np.pi:
+        angle_diff += 2 * np.pi
+
+    # Update cumulative angle
+    self.cum_angle += angle_diff
+    self.prev_angle = curr_angle
+
+    # Calculate errors
+    err = self.target_radians - self.cum_angle
+    self.err_sum += err  # +=
+    err_delta = err - self.last_err
+    self.last_err = err
+
+    if (err != 0 and (self.target_radians / err) < 0) or self.correcting:
+        self.correcting = True
+
+        # Calculates the needed velocity to correct Cozmo's orientation
+        if err < 0:
+            self.target_speed = KP * err
+            # self.target_speed = KP * err + KI * self.err_sum + KD * err_delta  # Uncomment if KI != 0 or KD != 0
+        else:
+            self.target_speed = KP * -err
+            # self.target_speed = KP * -err + KI * self.err_sum + KD * err_delta
+
+    set_wheel_velocity(self.target_speed)
+
+    print("\nerr:", err)
+    print("err_delta:", err_delta)
+    print("cum_angle:", self.cum_angle)
+    print("target radians:", self.target_radians)
+    print("target speed:", self.target_speed)
+
+    if abs(err) < np.radians(0.1):
+        # Reset values and trackers
+        set_wheel_velocity(0)
+        self.target_radians = 0
+        self.target_speed = 0
+        self.correcting = False
+        self.moving = False
+        self.err_sum = 0
+        self.last_err = 0
+        self.cum_angle = 0
+        self.prev_angle = self.sim.getObjectOrientation(self.cozmo)[2]
+
+def set_wheel_velocity(speed: float, spin=True):
+    if spin:
+        vel_front = 2 * (speed * WHEELBASE_RADIUS) / FRONT_WHEEL_RADIUS
+        vel_back = 2 * (speed * WHEELBASE_RADIUS) / BACK_WHEEL_RADIUS
+
+        if self.target_radians > 0:
+            self.sim.setJointTargetVelocity(self.joints['left_front'], vel_front)
+            self.sim.setJointTargetVelocity(self.joints['left_back'], vel_back)
+            self.sim.setJointTargetVelocity(self.joints['right_front'], -vel_front)
+            self.sim.setJointTargetVelocity(self.joints['right_back'], -vel_back)
+        else:
+            self.sim.setJointTargetVelocity(self.joints['left_front'], -vel_front)
+            self.sim.setJointTargetVelocity(self.joints['left_back'], -vel_back)
+            self.sim.setJointTargetVelocity(self.joints['right_front'], vel_front)
+            self.sim.setJointTargetVelocity(self.joints['right_back'], vel_back)
+    else:
+        self.sim.setJointTargetVelocity(self.joints['left_front'], vel_front)
+        self.sim.setJointTargetVelocity(self.joints['left_back'], vel_back)
+        self.sim.setJointTargetVelocity(self.joints['right_front'], vel_front)
+        self.sim.setJointTargetVelocity(self.joints['right_back'], vel_back)
+
+def turn_in_place(radians, rads):
+        if radians == 0: return
+
+        radians *= -1  # Flips polarity to match Cozmo's orientation scheme
+
+        self.target_radians = radians
+        self.target_speed = rads
+        self.moving = True
+
+def is_moving():
+    return self.moving
+
+# See the user manual or the available code snippets for additional callback functions and details
