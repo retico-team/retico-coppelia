@@ -2,28 +2,43 @@ import time
 import threading
 import numpy as np
 
-# Cozmo radi
-WHEELBASE_RADIUS = 0.0729
-FRONT_WHEEL_RADIUS = 0.0495
-BACK_WHEEL_RADIUS = 0.0375
-BACK_WHEEL_SCALAR = 1.32  # TODO: Recalculate this
 
 def sysCall_init():
+    # Constants
+    self.WHEELBASE_RADIUS = 0.0729
+    self.FRONT_WHEEL_RADIUS = 0.0495
+    self.BACK_WHEEL_RADIUS = 0.0375
+    self.MAX_LIFT_POS = 0.785
+    self.MAX_HEAD_POS = 0.785
+
     # Init scene object handles
     self.sim = require('sim')
     self.cozmo = self.sim.getObject('/cozmo')
     self.joints = {}
     for name in ['left_front', 'left_back', 'right_front', 'right_back']:
         self.joints[name] = self.sim.getObject('/cozmo/' + name + '_joint')
+    self.joints['lift'] = self.sim.getObject('/cozmo/arm_joint')
+    self.joints['head'] = self.sim.getObject('/cozmo/camera_joint')
+
+    # Current active motion
+    self.motion = None
 
     # Flags
-    self.moving = False
+    self.turning = False
+    self.driving = False
+    self.wheels = False
+    self.head = False
+    self.lift = False
 
     # Cozmo target variables
     self.target_radians = 0
     self.target_speed = 0
+    self.lift_height = 0
+    self.lift_speed = 0
+    self.head_angle = 0
+    self.head_speed = 0
 
-    # variable trackers
+    # Variable trackers
     self.cum_angle = 0
     self.prev_angle = self.sim.getObjectOrientation(self.cozmo)[2]
 
@@ -32,37 +47,82 @@ def sysCall_thread():
     pass
 
 def sysCall_sensing():
-    curr_angle = self.sim.getObjectOrientation(self.cozmo)[2]
+    if self.turning:
+        # Update tracker variables
+        curr_angle = self.sim.getObjectOrientation(self.cozmo)[2]
 
-    # Update tracker variables
-    angle_diff = curr_angle - self.prev_angle
-    if angle_diff > np.pi:
-        angle_diff -= 2 * np.pi
-    elif angle_diff < -np.pi:
-        angle_diff += 2 * np.pi
+        angle_diff = curr_angle - self.prev_angle
+        if angle_diff > np.pi:
+            angle_diff -= 2 * np.pi
+        elif angle_diff < -np.pi:
+            angle_diff += 2 * np.pi
 
-    self.cum_angle += angle_diff
-    self.prev_angle = curr_angle
-    err = self.target_radians - self.cum_angle
+        self.cum_angle += angle_diff
+        self.prev_angle = curr_angle
+        err = self.target_radians - self.cum_angle
 
-    if abs(err) < np.radians(1):  # less than 0.017 radians
-        # Reset values and trackers
-        set_wheel_velocity(0)
-        self.target_radians = 0
-        self.target_speed = 0
-        self.moving = False
-        self.cum_angle = 0
-        self.prev_angle = self.sim.getObjectOrientation(self.cozmo)[2]
-        print("Target reached.")
-    elif abs(err) < 1:  # less than 1 radians
-        self.target_speed = min(np.log(abs(err)) + 2 * np.e, self.target_speed)
+        if abs(err) < np.radians(1):  # less than 1 degree
+            # Reset values and trackers
+            set_wheel_velocity(0)
+            self.target_radians = 0
+            self.target_speed = 0
+            self.turning = False
+            self.cum_angle = 0
+            self.prev_angle = self.sim.getObjectOrientation(self.cozmo)[2]
+        elif abs(err) < 1:  # less than 1 radians
+            self.target_speed = min(np.log(abs(err)) + 2 * np.e, self.target_speed)
 
-    set_wheel_velocity(self.target_speed)
+        set_wheel_velocity(self.target_speed)
+    elif self.driving:
+        # Update tracker variables
+        curr_angle = self.sim.getJointPosition(self.joints['left_front'])
+
+        angle_diff = curr_angle - self.prev_angle
+        if angle_diff > np.pi:
+            angle_diff -= 2 * np.pi
+        elif angle_diff < -np.pi:
+            angle_diff += 2 * np.pi
+
+        self.cum_angle += angle_diff
+        self.prev_angle = curr_angle
+        err = self.target_radians - self.cum_angle
+
+        if abs(err) < np.radians(5):  # less than 5 degree
+            # Reset values and trackers
+            set_wheel_velocity(0)
+            self.target_radians = 0
+            self.target_speed = 0
+            self.driving = False
+            self.cum_angle = 0
+            self.prev_angle = self.sim.getJointPosition(self.joints['left_front'])
+        elif abs(err) < 1:  # less than 1 radians
+            self.target_speed = min(np.log(abs(err)) + 2 * np.e, self.target_speed)
+
+        set_wheel_velocity(self.target_speed, spin=False)
+
+    if self.lift:
+        self.sim.setJointTargetPosition(
+            self.joints['lift'],
+            self.lift_height,
+            [self.lift_speed, None, None]
+        )
+        err = self.lift_height - self.sim.getJointPosition(self.joints['lift'])
+        if abs(err) < np.radians(1):
+            self.lift = False
+    if self.head:
+        self.sim.setJointTargetPosition(
+            self.joints['head'],
+            self.head_angle,
+            [self.head_speed, None, None]
+        )
+        err = self.head_angle - self.sim.getJointPosition(self.joints['head'])
+        if abs(err) < np.radians(1):
+            self.head = False
 
 def set_wheel_velocity(speed: float, spin=True):
     if spin:
-        vel_front = 2 * (speed * WHEELBASE_RADIUS) / FRONT_WHEEL_RADIUS
-        vel_back = 2 * (speed * WHEELBASE_RADIUS) / BACK_WHEEL_RADIUS
+        vel_front = 2 * (speed * self.WHEELBASE_RADIUS) / self.FRONT_WHEEL_RADIUS
+        vel_back = 2 * (speed * self.WHEELBASE_RADIUS) / self.BACK_WHEEL_RADIUS
 
         if self.target_radians > 0:
             self.sim.setJointTargetVelocity(self.joints['left_front'], vel_front)
@@ -75,22 +135,67 @@ def set_wheel_velocity(speed: float, spin=True):
             self.sim.setJointTargetVelocity(self.joints['right_front'], vel_front)
             self.sim.setJointTargetVelocity(self.joints['right_back'], vel_back)
     else:
-        self.sim.setJointTargetVelocity(self.joints['left_front'], vel_front)
-        self.sim.setJointTargetVelocity(self.joints['left_back'], vel_back)
-        self.sim.setJointTargetVelocity(self.joints['right_front'], vel_front)
-        self.sim.setJointTargetVelocity(self.joints['right_back'], vel_back)
+        vel_front = (speed * self.WHEELBASE_RADIUS) / self.FRONT_WHEEL_RADIUS
+        vel_back = (speed * self.WHEELBASE_RADIUS) / self.BACK_WHEEL_RADIUS
+        if self.target_radians > 0:
+            self.sim.setJointTargetVelocity(self.joints['left_front'], vel_front)
+            self.sim.setJointTargetVelocity(self.joints['left_back'], vel_back)
+            self.sim.setJointTargetVelocity(self.joints['right_front'], vel_front)
+            self.sim.setJointTargetVelocity(self.joints['right_back'], vel_back)
+        else:
+            self.sim.setJointTargetVelocity(self.joints['left_front'], -vel_front)
+            self.sim.setJointTargetVelocity(self.joints['left_back'], -vel_back)
+            self.sim.setJointTargetVelocity(self.joints['right_front'], -vel_front)
+            self.sim.setJointTargetVelocity(self.joints['right_back'], -vel_back)
 
+def get_constants():
+    return {
+        'FRONT_WHEEL_RADIUS': self.FRONT_WHEEL_RADIUS,
+        'BACK_WHEEL_RADIUS': self.BACK_WHEEL_RADIUS,
+        'WHEELBASE_RADIUS': self.WHEELBASE_RADIUS
+    }
 
 def turn_in_place(radians, rads):
-    if radians == 0: return
+    if radians == 0 or rads == 0: return
 
     radians *= -1  # Flips polarity to match Cozmo's orientation scheme
 
     self.target_radians = radians
     self.target_speed = rads
-    self.moving = True
+    self.prev_angle = self.sim.getObjectOrientation(self.cozmo)[2]
+    self.turning = True
+
+def drive_straight(millimeters, mmps):
+    if millimeters == 0 or mmps == 0: return
+
+    # millimeters *= -1  # Flips polarity to match Cozmo's orientation scheme
+
+    self.target_radians = millimeters / (self.FRONT_WHEEL_RADIUS * 1000)
+    self.target_speed = mmps / (self.FRONT_WHEEL_RADIUS * 1000)
+    self.prev_angle = self.sim.getJointPosition(self.joints['left_front'])
+    self.driving = True
+
+def set_lift_height(height, speed=None):
+    if height > 1:
+        height = 1
+    elif height < 0:
+        height = 0
+
+    self.lift_height = height * self.MAX_LIFT_POS
+    self.lift_speed = speed
+    self.lift = True
+
+def set_head_angle(angle, speed=None):
+    if angle > 1:
+        angle = 1
+    elif angle < 0:
+        angle = 0
+
+    self.head_angle = angle * self.MAX_HEAD_POS
+    self.head_speed = speed
+    self.head = True
 
 def is_moving():
-    return self.moving
+    return self.driving or self.turning or self.head or self.lift
 
 # See the user manual or the available code snippets for additional callback functions and details

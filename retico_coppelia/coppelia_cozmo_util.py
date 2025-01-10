@@ -13,6 +13,14 @@ class Speed(ABC):
     def to_rads(self):
         raise NotImplementedError
 
+    @abstractmethod
+    def to_dps(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_mmps(self):
+        raise NotImplementedError
+
 
 class DegreesPerSecond(Speed):
     def __init__(self, degs):
@@ -22,6 +30,12 @@ class DegreesPerSecond(Speed):
         # return (np.pi / 180) * self.rate
         return np.radians(self.rate)
 
+    def to_dps(self):
+        raise NotImplementedError
+
+    def to_mmps(self):
+        raise NotImplementedError
+
 
 class RadiansPerSecond(Speed):
     def __init__(self, rads):
@@ -30,54 +44,65 @@ class RadiansPerSecond(Speed):
     def to_rads(self):
         return self.rate
 
+    def to_dps(self):
+        raise NotImplementedError
+
+    def to_mmps(self):
+        raise NotImplementedError
+
 
 class MillimetersPerSecond(Speed):
     def __init__(self, mms):
         super().__init__(mms)
 
     def to_rads(self):
-        raise NotImplementedError  # TODO
+        raise NotImplementedError
+
+    def to_dps(self):
+        raise NotImplementedError
+
+    def to_mmps(self):
+        return self.rate
 
 
-class AngleDistance(ABC):
+class Angle(ABC):
     def __init__(self, magnitude):
         self.magnitude = magnitude
-
-    @abstractmethod
-    def get_wait_time(self, speed: Speed):
-        raise NotImplementedError
 
     @abstractmethod
     def to_radians(self):
         raise NotImplementedError
 
 
-class Degrees(AngleDistance):
+class Degrees(Angle):
     def __init__(self, magnitude):
         super().__init__(magnitude)
-
-    def get_wait_time(self, speed: Speed):
-        return abs(self.to_radians() / speed.to_rads())
 
     def to_radians(self):
         # return (np.pi / 180) * self.magnitude
         return np.degrees(self.magnitude)
 
 
-class Radians(AngleDistance):
+class Radians(Angle):
     def __init__(self, magnitude):
         super().__init__(magnitude)
-
-    def get_wait_time(self, speed: Speed):
-        return abs(self.magnitude / speed.to_rads())
 
     def to_radians(self):
         return self.magnitude
 
 
-class Millimeters(AngleDistance):
+class Distance(ABC):
+    def __init__(self, magnitude):
+        self.magnitude = magnitude
+
+    @abstractmethod
+    def to_millimeters(self):
+        raise NotImplementedError
+
+
+class Millimeters(Distance):
     def __init__(self, magnitude):
         super().__init__(magnitude)
 
-    def get_wait_time(self, speed: Speed):
-        raise NotImplementedError  # TODO
+    def to_millimeters(self):
+        return self.magnitude

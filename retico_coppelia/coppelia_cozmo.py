@@ -6,7 +6,7 @@ from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 from retico_core.text import TextIU
 
 from retico_coppelia.coppelia_cozmo_util import (
-    AngleDistance, Speed, Degrees, DegreesPerSecond, Radians, RadiansPerSecond
+    Angle, Distance, Speed, Degrees, DegreesPerSecond, Radians, RadiansPerSecond, Millimeters, MillimetersPerSecond
 )
 
 class Cozmo:
@@ -93,73 +93,29 @@ class Cozmo:
         while self._sim.callScriptFunction("is_moving", self._script_handle):
             time.sleep(0.1)
 
-    def turn_in_place(self, angle: AngleDistance, speed: Speed):
+    def turn_in_place(self, angle: Angle, speed: Speed):
         while self._simlock: continue
         self._sim.callScriptFunction("turn_in_place", self._script_handle, angle.to_radians(), speed.to_rads())
 
         return self
 
-    def set_head_angle(self, angle: AngleDistance, speed: Speed):
+    def set_head_angle(self, angle: float, speed: Speed):
         while self._simlock: continue
+        self._sim.callScriptFunction("set_head_angle", self._script_handle, angle, speed.to_rads())
 
-        thread = threading.Thread(
-            target=self._set_head_angle,
-            args=[
-                self._sims['head'],
-                self._head,
-                angle,
-                speed,
-                self.FRONT_LEFT_RADIUS
-            ]
-        )
-        thread.daemon = True
-        thread = self.CozmoThread(self, thread)
-        thread.start()
-
-        return thread
+        return self
 
     def set_lift_height(self, height: float, speed: Speed):
         while self._simlock: continue
+        self._sim.callScriptFunction("set_lift_height", self._script_handle, height, speed.to_rads())
 
-        thread = threading.Thread(
-            target=self._set_lift_height,
-            args=[
-                self._sims['lift'],
-                self._lift,
-                height,
-                speed
-            ]
-        )
-        thread.daemon = True
-        thread = self.CozmoThread(self, thread)
-        thread.start()
+        return self
 
-        return thread
-
-    def drive_straight(self, distance: AngleDistance, speed: Speed):
+    def drive_straight(self, distance: Distance, speed: Speed):
         while self._simlock: continue
+        self._sim.callScriptFunction("drive_straight", self._script_handle, distance.to_millimeters(), speed.to_mmps())
 
-        thread = threading.Thread(
-            target=self._drive_straight,
-            args=[
-                self._sims['wheels'],
-                [
-                    self._left_front_motor,
-                    self._left_back_motor,
-                    self._right_front_motor,
-                    self._right_back_motor
-                ],
-                distance,
-                speed,
-                self.FRONT_LEFT_RADIUS
-            ]
-        )
-        thread.daemon = True
-        thread = self.CozmoThread(self, thread)
-        thread.start()
-
-        return thread
-
+        return self
 
 class CoppeliaCozmoRobot(retico_core.AbstractModule):
     @staticmethod
@@ -200,22 +156,20 @@ class CoppeliaCozmoRobot(retico_core.AbstractModule):
         command = iu.payload
         if "turn left" in command:
             self.robot.turn_in_place(angle=Radians(2 * np.pi), speed=RadiansPerSecond(np.pi / 2)).wait_until_completed()
-            # self.robot.turn_in_place(angle=Radians(2 * np.pi), speed=RadiansPerSecond(np.pi/2))
         if "turn right" in command:
             self.robot.turn_in_place(angle=Radians(2 * -np.pi), speed=RadiansPerSecond(np.pi / 2)).wait_until_completed()
-            # self.robot.turn_in_place(angle=Radians(2 * -np.pi), speed=RadiansPerSecond(np.pi/2))
         if "look up" in command:
-            self.robot.set_head_angle(angle=Radians(self.max_head_angle), speed=RadiansPerSecond(1)).wait_until_completed()
+            self.robot.set_head_angle(angle=self.max_head_angle, speed=RadiansPerSecond(1)).wait_until_completed()
         if "look down" in command:
-            self.robot.set_head_angle(angle=Radians(0), speed=RadiansPerSecond(1)).wait_until_completed()
+            self.robot.set_head_angle(angle=0, speed=RadiansPerSecond(1)).wait_until_completed()
         if "lift up" in command:
-            self.robot.set_lift_height(height=self.max_lift_height, speed=RadiansPerSecond(1)).wait_until_completed()
+            self.robot.set_lift_height(height=self.max_lift_height, speed=RadiansPerSecond(0.2)).wait_until_completed()
         if "lift down" in command:
             self.robot.set_lift_height(height=0, speed=RadiansPerSecond(1)).wait_until_completed()
         if "drive forward" in command:
-            self.robot.drive_straight(distance=Degrees(90), speed=DegreesPerSecond(90)).wait_until_completed()
+            self.robot.drive_straight(distance=Millimeters(150), speed=MillimetersPerSecond(50)).wait_until_completed()
         if "drive backward" in command:
-            self.robot.drive_straight(distance=Degrees(-90), speed=DegreesPerSecond(90)).wait_until_completed()
+            self.robot.drive_straight(distance=Millimeters(-150), speed=MillimetersPerSecond(50)).wait_until_completed()
 
     def shutdown(self):
         self.robot.shutdown()
