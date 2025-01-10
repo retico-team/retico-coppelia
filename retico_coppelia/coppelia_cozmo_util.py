@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 
-class Speed(ABC):
+class AngularSpeed(ABC):
     def __init__(self, rate):
         if rate < 0:
             raise Exception("Can't pass negative value for speed.")
@@ -17,49 +17,32 @@ class Speed(ABC):
     def to_dps(self):
         raise NotImplementedError
 
-    @abstractmethod
-    def to_mmps(self):
-        raise NotImplementedError
 
-
-class DegreesPerSecond(Speed):
-    def __init__(self, degs):
-        super().__init__(degs)
+class DPS(AngularSpeed):
+    def __init__(self, rate):
+        super().__init__(rate)
 
     def to_rads(self):
-        # return (np.pi / 180) * self.rate
         return np.radians(self.rate)
 
     def to_dps(self):
-        raise NotImplementedError
-
-    def to_mmps(self):
-        raise NotImplementedError
+        return self.rate
 
 
-class RadiansPerSecond(Speed):
-    def __init__(self, rads):
-        super().__init__(rads)
+class Rads(AngularSpeed):
+    def __init__(self, rate):
+        super().__init__(rate)
 
     def to_rads(self):
         return self.rate
 
     def to_dps(self):
-        raise NotImplementedError
-
-    def to_mmps(self):
-        raise NotImplementedError
+        return np.degrees(self.rate)
 
 
-class MillimetersPerSecond(Speed):
-    def __init__(self, mms):
-        super().__init__(mms)
-
-    def to_rads(self):
-        raise NotImplementedError
-
-    def to_dps(self):
-        raise NotImplementedError
+class MMPS:
+    def __init__(self, rate):
+        self.rate = rate
 
     def to_mmps(self):
         return self.rate
@@ -79,8 +62,10 @@ class Degrees(Angle):
         super().__init__(magnitude)
 
     def to_radians(self):
-        # return (np.pi / 180) * self.magnitude
-        return np.degrees(self.magnitude)
+        return np.radians(self.magnitude)
+
+    def to_degrees(self):
+        return self.magnitude
 
 
 class Radians(Angle):
@@ -90,13 +75,16 @@ class Radians(Angle):
     def to_radians(self):
         return self.magnitude
 
+    def to_degrees(self):
+        return np.degrees(self.magnitude)
+
 
 class Distance(ABC):
     def __init__(self, magnitude):
         self.magnitude = magnitude
 
     @abstractmethod
-    def to_millimeters(self):
+    def to_mm(self):
         raise NotImplementedError
 
 
@@ -104,5 +92,5 @@ class Millimeters(Distance):
     def __init__(self, magnitude):
         super().__init__(magnitude)
 
-    def to_millimeters(self):
+    def to_mm(self):
         return self.magnitude
