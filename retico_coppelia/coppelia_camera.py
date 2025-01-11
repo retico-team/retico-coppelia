@@ -7,11 +7,11 @@ import retico_core
 from retico_vision.vision import ImageIU
 
 
-class CoppeliaSimCamera(retico_core.AbstractProducingModule):
+class CoppeliaCamera(retico_core.AbstractProducingModule):
 
     @staticmethod
     def name():
-        return "CoppeliaSimCamera"
+        return "CoppeliaCamera"
 
     @staticmethod
     def description():
