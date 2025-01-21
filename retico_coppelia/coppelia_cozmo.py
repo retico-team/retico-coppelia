@@ -1,5 +1,4 @@
 import time
-import numpy as np
 import retico_core
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 from retico_coppelia.coppelia_cozmo_util import *
