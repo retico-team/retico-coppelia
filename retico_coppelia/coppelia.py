@@ -8,7 +8,7 @@ class JointForceIU(retico_core.abstract.IncrementalUnit):
     def type():
         return "JointForceIU"
 
-    def __init__(self, creator=None, iuid=0, previous_iu=None, grounded_in=None, payload: dict[str: list]=None, **kwargs):
+    def __init__(self, creator=None, iuid=0, previous_iu=None, grounded_in=None, payload: dict[str: float]=None, **kwargs):
         super().__init__(creator=creator, iuid=iuid, previous_iu=previous_iu, grounded_in=grounded_in, payload=payload)
         if payload is not None:
             self.payload = payload
@@ -32,7 +32,7 @@ class JointVelocityIU(retico_core.abstract.IncrementalUnit):
     def type():
         return "JointVelocityIU"
 
-    def __init__(self, creator=None, iuid=0, previous_iu=None, grounded_in=None, payload: dict[str: list]=None, **kwargs):
+    def __init__(self, creator=None, iuid=0, previous_iu=None, grounded_in=None, payload: dict[str: float]=None, **kwargs):
         super().__init__(creator=creator, iuid=iuid, previous_iu=previous_iu, grounded_in=grounded_in, payload=payload)
         if payload is not None:
             self.payload = payload
@@ -56,7 +56,7 @@ class JointPositionIU(retico_core.abstract.IncrementalUnit):
     def type():
         return "JointPositionIU"
 
-    def __init__(self, creator=None, iuid=0, previous_iu=None, grounded_in=None, payload: dict[str: list]=None, **kwargs):
+    def __init__(self, creator=None, iuid=0, previous_iu=None, grounded_in=None, payload: dict[str: float]=None, **kwargs):
         super().__init__(creator=creator, iuid=iuid, previous_iu=previous_iu, grounded_in=grounded_in, payload=payload)
         if payload is not None:
             self.payload = payload
@@ -99,6 +99,7 @@ class CoppeliaModule(retico_core.AbstractConsumingModule):
         self.client = RemoteAPIClient()
         self.sim = self.client.require('sim')
         self.sim.loadScene(scene)
+        self.queue = []
 
         if self.start_scene:
             print("Starting simulation...")
@@ -107,9 +108,13 @@ class CoppeliaModule(retico_core.AbstractConsumingModule):
     def process_update(self, update_message):
         for iu, um in update_message:
             if um == retico_core.abstract.UpdateType.ADD:
-                self.process_iu(iu)
+                self.queue.append(iu)
+        self.process_iu()
 
-    def process_iu(self, iu):
+    def process_iu(self):
+        if len(self.queue) < 1: return
+
+        iu = self.queue.pop()
         if type(iu) is JointForceIU:
             for path, force in iu.payload.items():
                 handle = self.sim.getObject(path)
