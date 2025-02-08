@@ -27,6 +27,17 @@ class Cozmo:
             print("Stopping simulation...")
             self._sim.stopSimulation()
 
+    def set_zmq_port(self, port):
+        """Sets the port for Cozmo to use for ZMQ messaging.
+
+        :param port: The port that the publisher will publish to
+        """
+        self._sim.callScriptFunction(
+            "bind_zmq",
+            self._script_handle,
+            port
+        )
+
     def wait_until_completed(self):
         """Hangs execution of function calls from a Cozmo object until the corresponding CoppeliaSim robot has stopped
         moving.
@@ -76,7 +87,7 @@ class Cozmo:
         """
         self._sim.callScriptFunction("drive_straight", self._script_handle, distance.to_mm(), speed.to_mmps())
         return self
-
+    
 
 class CoppeliaCozmoIU(retico_core.abstract.IncrementalUnit):
     """Incremental Unit for sending information to a CoppeliaCozmoModule.
