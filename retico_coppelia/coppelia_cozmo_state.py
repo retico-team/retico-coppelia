@@ -1,16 +1,21 @@
+import base64
 import time
 import threading
+
+import cv2
 import zmq
 import numpy as np
 from collections import deque
+from PIL import Image
+from retico_core import abstract
+# from retico_core.abstract import AbstractProducingModule, UpdateMessage
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-from retico_core.abstract import AbstractProducingModule
 from retico_coppelia.coppelia_cozmo import Cozmo
 # from retico_core.robot import RobotStateIU
 from retico_coppelia.coppelia_cozmo_util import CozmoStateIU
 
 
-class CozmoStateModule(AbstractProducingModule):
+class CozmoStateModule(abstract.AbstractProducingModule):
     @staticmethod
     def name():
         return "Cozmo State Module"
@@ -36,6 +41,8 @@ class CozmoStateModule(AbstractProducingModule):
         client = RemoteAPIClient()
         self._sim = client.require('sim')
 
+        # self.res = self._sim.getVisionSensorRes(self.robot.)
+
         print('Connecting to simulation...')
         context = zmq.Context()
         self.subscriber = context.socket(zmq.SUB)
@@ -46,26 +53,28 @@ class CozmoStateModule(AbstractProducingModule):
         if len(self.state_queue) == 0: return
 
         state = self.state_queue.popleft()
+        self.num_states += 1
         output_iu = self.create_iu(None)
         output_iu.set_state(state)
-        self.num_states += 1
-        self.append(output_iu)
+        um = abstract.UpdateMessage.from_iu(output_iu, abstract.UpdateType.ADD)
+        self.append(um)
 
-    def _state_listener(self, **kwargs):
+    def _state_listener(self):
         while self._update:
             try:
-
-                # if np.round(time.time() % 2, 1) < 0.1:  # Get only about half of the frames per ten seconds
                 state = self.subscriber.recv_json(zmq.NOBLOCK)
-                print(f"Received state: {state}")
-                # robot = kwargs['robot']
-                # state = robot.get_robot_state_dict()
-                # state.update({"left_wheel_speed": data['left_wheel_speed']})
-                # state.update({"right_wheel_speed": data['right_wheel_speed']})
-                # state.update({"battery_voltage": str(robot.battery_voltage)})
-                # state.update({"robot_id": str(robot.robot_id)})
-                # state.update({"time": str(time.time())})
-                # state.update({'face_count': str(robot.world.visible_face_count())})
+                stringified = state['image']
+                res = state['image_res']
+
+                img_buffer = base64.b64decode(stringified)
+                img = np.frombuffer(img_buffer, dtype=np.uint8).reshape(res[1], res[0], 3)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                img = cv2.flip(img, 0)
+                frame = Image.fromarray(img)
+
+                cv2.imshow("cozmo_image", frame)
+
+                state.update({"image": frame})
                 self.state_queue.append(state)
 
             except zmq.Again:
