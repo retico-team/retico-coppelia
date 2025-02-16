@@ -20,7 +20,7 @@ from retico_coppelia.coppelia_cozmo import CoppeliaCozmoModule, CoppeliaCozmoIU
 from retico_coppelia.coppelia_cozmo_state import CozmoStateModule
 from retico_coppelia.coppelia_camera import CoppeliaCameraModule
 
-scene = '/home/prigby/SLIM/repos/retico-coppelia/example/scenes/coppelia_cozmo_example.ttt'
+scene = '/home/prigby/SLIM/repos/retico-coppelia/example/coppelia_cozmo_example.ttt'
 sensor_path = '/cozmo/camera_joint/Vision_sensor'
 # sensor_path = '/cozmo_experimental/camera_joint/Vision_sensor'
 cozmo_path = '/cozmo'
