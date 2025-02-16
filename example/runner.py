@@ -28,7 +28,8 @@ coppelia = CoppeliaModule(scene=scene, start_scene=False)
 cozmo = CoppeliaCozmoModule(cozmo_path=cozmo_path, scene=scene, start_scene=True)
 state = CozmoStateModule(cozmo.robot, pub_ip='localhost')
 cam = CoppeliaCameraModule(scene=scene, sensor_path=sensor_path, visualizer=True)
-debug = DebugModule(print_payload_only=True)
+# debug = DebugModule(print_payload_only=True)
+debug = DebugModule(print_payload_only=False)
 
 state.subscribe(debug)
 

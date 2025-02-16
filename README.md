@@ -154,5 +154,5 @@ and speed. For more detail and a usage example, see the documentation for Coppel
 
 ### coppelia_cozmo_state.CozmoStateModule
 This module monitors and sends the state of a Cozmo robot within a currently running
-simulation scene as dictionary IUs. It takes a Cozmo robot and sets up a ZMQ channel 
+simulation scene as CozmoStateIUs (found in `coppelia_cozmo_state.py`). It takes a Cozmo robot and sets up a ZMQ channel 
 for retrieving updates published by that robot's script within CoppeliaSim.

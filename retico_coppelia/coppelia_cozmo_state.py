@@ -32,6 +32,12 @@ class CozmoStateIU(IncrementalUnit):
         """Sets the state of the robot"""
         self.payload = state
 
+    def __str__(self):
+        out = "\n{"
+        for key, val in self.payload.items():
+            out += "\n\t" + key + ": " + str(val) + ","
+        out += "\n}"
+        return out
 
 class CozmoStateModule(AbstractProducingModule):
     @staticmethod
