@@ -95,29 +95,3 @@ class Millimeters(Distance):
 
     def to_mm(self):
         return self.magnitude
-
-
-class CozmoStateIU(retico_core.abstract.IncrementalUnit):
-    """Attributes:
-
-    :param creator (AbstractModule): The module that created this IU
-    :param previous_iu (IncrementalUnit): A link to the IU created before the
-        current one.
-    :param grounded_in (IncrementalUnit): A link to the IU this IU is based on.
-    :param created_at (float): The UNIX timestamp of the moment the IU is created.
-    :param state (dict): The state of the robot
-    """
-
-    @staticmethod
-    def type():
-        return "Cozmo State IU"
-
-    def __init__(self, creator=None, iuid=0, previous_iu=None, grounded_in=None, state=None,
-                 **kwargs):
-        super().__init__(creator=creator, iuid=iuid, previous_iu=previous_iu,
-                         grounded_in=grounded_in, payload=state)
-        self.payload = state
-
-    def set_state(self, state):
-        """Sets the state of the robot"""
-        self.payload = state

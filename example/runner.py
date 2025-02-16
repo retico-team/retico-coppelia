@@ -22,9 +22,7 @@ from retico_coppelia.coppelia_camera import CoppeliaCameraModule
 
 scene = '/home/prigby/SLIM/repos/retico-coppelia/example/coppelia_cozmo_example.ttt'
 sensor_path = '/cozmo/camera_joint/Vision_sensor'
-# sensor_path = '/cozmo_experimental/camera_joint/Vision_sensor'
 cozmo_path = '/cozmo'
-# cozmo_path = '/cozmo_experimental'
 
 coppelia = CoppeliaModule(scene=scene, start_scene=False)
 cozmo = CoppeliaCozmoModule(cozmo_path=cozmo_path, scene=scene, start_scene=True)
@@ -86,7 +84,6 @@ for payload, ut in cozmo_inputs:
     coppelia_prefix.append(iu)
 
     i += 1
-
 
 input()
 

@@ -19,6 +19,8 @@ Additionally, to communicate with the CoppeliaSim software, CoppeliaSim's remote
   
 More information about CoppeliaSim's remote API client can be found [here](https://manual.coppeliarobotics.com/en/zmqRemoteApiOverview.htm).
 
+**!! ONLY USE BULLET 2.83 with CoppeliaCozmoModule. CoppeliaSim's other physics engines do not interact properly with the provided Cozmo model. !!**
+
 ---
 
 ## Example
@@ -113,6 +115,7 @@ for payload, ut in cozmo_inputs:
     coppelia.process_update(um)
     iu_counter += 1
     coppelia_prefix.append(iu)
+    
     i += 1
 
 input()
@@ -127,10 +130,29 @@ debug.stop()
 
 ## Module Synopses
 
-### CoppeliaModule  
+### coppelia.CoppeliaModule
+This is a general-purpose module for controlling joints within a CoppeliaSim scene.
+It accepts Position, Velocity, and Force IUs defined in `coppelia.py` that contain
+dicts pairing strings with float values. The strings should be paths within the scene
+to the joint that will be manipulated, and the float values are the target values to 
+apply to the respective joints. This module assumes very little about the contents of 
+the given scene, requiring only that the joints being manipulated are correctly 
+configured for the types of IUs being used to manipulate them.
 
-### CoppeliaCameraModule  
+### coppelia_camera.CoppeliaCameraModule
+This module grabs the feed from any vision sensor within a running CoppeliaSim scene and 
+converts it into PIL Image objects. 
 
-### CoppeliaCozmoModule
+### coppelia_cozmo.CoppeliaCozmoModule
+The CoppeliaCozmoModule provides bindings for a Cozmo robot within the CoppeliaSim simulator.
+It accepts CoppeliaCozmoIUs which pair a string action-term with a list of values specifying 
+a change in position/distance, speed of the transition to the specified position, and whether 
+Cozmo should wait to start other actions until the current one has been completed. There are 
+several different classes provided in `coppelia_cozmo_util.py` for specifying positions/distance
+and speed. For more detail and a usage example, see the documentation for CoppeliaCozmoIU in
+`coppelia_cozmo.py`.
 
-### CozmoStateModule
+### coppelia_cozmo_state.CozmoStateModule
+This module monitors and sends the state of a Cozmo robot within a currently running
+simulation scene as dictionary IUs. It takes a Cozmo robot and sets up a ZMQ channel 
+for retrieving updates published by that robot's script within CoppeliaSim.
