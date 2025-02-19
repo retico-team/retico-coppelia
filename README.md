@@ -24,106 +24,151 @@ More information about CoppeliaSim's remote API client can be found [here](https
 ---
 
 ## Example
+### Coppelia Runner
 ```python
 import sys, os
+import threading
 import time
 import numpy as np
 
-prefix = '<path-to-retico-modules>'
+prefix = '<path-to-Retico-repositories>'
 
 os.environ['RETICO'] = prefix + "retico-core"
 os.environ['RETICOV'] = prefix + "retico-vision"
+os.environ["ZMQ"] = prefix + "retico-zmq"
 os.environ['CPLIA'] = "retico-coppelia"
 
 sys.path.append(os.environ['RETICO'])
 sys.path.append(os.environ['RETICOV'])
+sys.path.append(os.environ["ZMQ"])
 sys.path.append(os.environ['CPLIA'])
 
 from retico_core import UpdateType, UpdateMessage
 from retico_core.debug import DebugModule
-from retico_coppelia.coppelia import CoppeliaModule, JointPositionIU, JointVelocityIU
+from retico_core.text import SpeechRecognitionIU
+from retico_zmq.zmq import ReaderSingleton
+from retico_coppelia.coppelia import CoppeliaModule, JointPositionIU
 from retico_coppelia.coppelia_cozmo_util import *
-from retico_coppelia.coppelia_cozmo import CoppeliaCozmoModule, CoppeliaCozmoIU
+from retico_coppelia.coppelia_cozmo import CoppeliaCozmoModule
 from retico_coppelia.coppelia_cozmo_state import CozmoStateModule
 from retico_coppelia.coppelia_camera import CoppeliaCameraModule
+from asr2cozmo import ASR2CozmoModule
 
-# Specify the scene to load and manipulate in CoppeliaSim
-scene = '<path-to-this-repository>/retico-coppelia/example/coppelia_cozmo_example.ttt'
-
-# Specify the vision sensor/camera whose feed to view
+scene = './coppelia_cozmo_example.ttt'
 sensor_path = '/cozmo/camera_joint/Vision_sensor'
-
-# Specify the path to a given cozmo robot within the scene.
-# This is the robot that will be controlled.
 cozmo_path = '/cozmo'
 
+ip = "<ip-of-machine-running-asr_runner>"
+asr = ReaderSingleton(ip=ip, port="12345")
+asr.add(topic="asr", target_iu_type=SpeechRecognitionIU)
+
+asr2cozmo = ASR2CozmoModule()
 coppelia = CoppeliaModule(scene=scene, start_scene=False)
 cozmo = CoppeliaCozmoModule(cozmo_path=cozmo_path, scene=scene, start_scene=True)
-state = CozmoStateModule(cozmo.robot, pub_ip='localhost')
+state = CozmoStateModule(cozmo.robot, pub_ip='localhost')  # pub_ip is the ip of the machine running the simulation
 cam = CoppeliaCameraModule(scene=scene, sensor_path=sensor_path, visualizer=True)
-debug = DebugModule(print_payload_only=True)
+# debug = DebugModule(print_payload_only=True)
+debug = DebugModule(print_payload_only=False)
 
+asr.subscribe(asr2cozmo)
+asr.subscribe(debug)
+asr2cozmo.subscribe(cozmo)
 state.subscribe(debug)
 
+asr.run()
+asr2cozmo.run()
+coppelia.run()
 cozmo.run()
 state.run()
 cam.run()
 debug.run()
 
-# input to CoppeliaCozmoModule
-cozmo_inputs = [
-    ({"turn": [Radians(2 * np.pi), Rads(np.pi), True]}, UpdateType.ADD),  # [angle, rate, wait_until_completed], update_type
-    ({"drive": [Millimeters(400), MMPS(200), False]}, UpdateType.ADD),  # [distance, rate, wait_until_completed], update_type
-    ({"lift": [1, Rads(1), True]}, UpdateType.ADD),  # [position, rate, wait_until_completed], update_type
-    ({"look": [1, Rads(1), True]}, UpdateType.ADD),
-    ({"lift": [0, DPS(15), False]}, UpdateType.ADD),
-    ({"look": [0, DPS(15), False]}, UpdateType.ADD),
-    ({"turn": [Degrees(-360), DPS(180), True]}, UpdateType.ADD),
-    ({"drive": [Millimeters(-400), MMPS(200), True]}, UpdateType.ADD)
-]
-
 # input to CoppeliaModule
 inputs = [
-    ({"/LBRiiwa14R820/joint": np.radians(90)}, UpdateType.ADD),  # {joint_path: magnitude}, update_type
-    ({"/LBRiiwa14R820/link2_resp/joint": np.radians(90)}, UpdateType.ADD),
-    ({"/LBRiiwa14R820/link3_resp/joint": np.radians(180)}, UpdateType.ADD),
-    ({"/LBRiiwa14R820/link4_resp/joint": np.radians(-90)}, UpdateType.ADD),
-    ({"/LBRiiwa14R820/link5_resp/joint": np.radians(90)}, UpdateType.ADD),
-    ({"/LBRiiwa14R820/link6_resp/joint": np.radians(90)}, UpdateType.ADD),
-    ({"/LBRiiwa14R820/link7_resp/joint": np.radians(-90)}, UpdateType.ADD),
-    ({"/LBRiiwa14R820/joint": np.radians(-90)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/joint": np.radians(30)}, UpdateType.ADD),  # {joint_path: magnitude}, update_type
+    ({"/LBRiiwa14R820/link2_resp/joint": np.radians(30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link3_resp/joint": np.radians(90)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link4_resp/joint": np.radians(-30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link5_resp/joint": np.radians(30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link6_resp/joint": np.radians(30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link7_resp/joint": np.radians(-30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/joint": np.radians(-30)}, UpdateType.ADD),
+
+    ({"/LBRiiwa14R820/joint": np.radians(30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link7_resp/joint": np.radians(30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link6_resp/joint": np.radians(-30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link5_resp/joint": np.radians(-30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link4_resp/joint": np.radians(30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link3_resp/joint": np.radians(-90)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/link2_resp/joint": np.radians(-30)}, UpdateType.ADD),
+    ({"/LBRiiwa14R820/joint": np.radians(-30)}, UpdateType.ADD),
 ]
 
-time.sleep(2)  # Wait for simulation to start and settle
+def _loop(inputs, _looping):
+    while _looping:
+        iu_counter = 0
+        coppelia_prefix = [None]
+        i = 0
+        for payload, ut in inputs:
+            iu = JointPositionIU(iuid=iu_counter, previous_iu=coppelia_prefix[-1], payload=inputs[i][0])
+            um = UpdateMessage.from_iu(iu, inputs[i][1])
+            coppelia.process_update(um)
+            iu_counter += 1
+            coppelia_prefix.append(iu)
+            i = (i + 1) % 16
 
-iu_counter = 0
-cozmo_prefix = [None]
-coppelia_prefix = [None]
-i = 0
-for payload, ut in cozmo_inputs:
-    iu = CoppeliaCozmoIU(iuid=iu_counter, previous_iu=cozmo_prefix[-1], payload=payload)
-    um = UpdateMessage.from_iu(iu, ut)
-    cozmo.process_update(um)
-    iu_counter += 1
-    cozmo_prefix.append(iu)
-
-    if i < 4:
-        iu = JointPositionIU(iuid=iu_counter, previous_iu=coppelia_prefix[-1], payload=inputs[i][0])
-    else:
-        iu = JointVelocityIU(iuid=iu_counter, previous_iu=coppelia_prefix[-1], payload=inputs[i][0])
-    um = UpdateMessage.from_iu(iu, inputs[i][1])
-    coppelia.process_update(um)
-    iu_counter += 1
-    coppelia_prefix.append(iu)
-    
-    i += 1
+_looping = True
+t = threading.Thread(target=_loop, args=[inputs, _looping], daemon=True)
+t.start()
 
 input()
+_looping = False
 
+asr.stop()
+asr2cozmo.stop()
 coppelia.stop()
 cozmo.stop()
 state.stop()
 cam.stop()
+debug.stop()
+```
+
+### ASR Runner
+```python
+import sys, os
+
+prefix = '<path-to-Retico-repositories>'
+sys.path.append(prefix+'retico-core')
+sys.path.append(prefix+'retico-whisperasr')
+sys.path.append(prefix+'retico-zmq')
+
+from retico_core.audio import MicrophoneModule
+from retico_core.debug import DebugModule
+from retico_zmq.zmq import WriterSingleton, ZeroMQWriter
+from retico_whisperasr import WhisperASRModule
+
+ip = '<local-ip>'
+WriterSingleton(ip=ip, port='12345')
+zmq_writer = ZeroMQWriter(topic='asr')
+
+mic = MicrophoneModule(rate=16000)
+asr = WhisperASRModule()
+debug = DebugModule(print_payload_only=True)
+
+mic.subscribe(asr)
+asr.subscribe(zmq_writer)
+asr.subscribe(debug)
+
+mic.run()
+asr.run()
+zmq_writer.run()
+debug.run()
+
+input()
+
+mic.stop()
+asr.stop()
+zmq_writer.stop()
 debug.stop()
 ```
 ---
