@@ -24,6 +24,8 @@ More information about CoppeliaSim's remote API client can be found [here](https
 ---
 
 ## Example
+An example video of the modules in action can be found [here](https://youtu.be/Inz1lju2XeY?si=6TzpPyY7w2tDH3Sy).
+
 ### Coppelia Runner
 ```python
 import sys, os
